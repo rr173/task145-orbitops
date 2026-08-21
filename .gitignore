@@ -1,0 +1,5 @@
+# Local databases and build artifacts must never enter the source baseline.
+*.db
+*.db-shm
+*.db-wal
+orbitops
