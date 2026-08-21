@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"orbitops/internal/model"
+	"orbitops/internal/orbmath"
 )
 
 func mustState(t *testing.T, p *Propagator, el model.Elements, at model.Epoch) model.StateVector {
@@ -83,3 +84,23 @@ func TestRangeBetweenSameSat(t *testing.T) {
 		t.Fatalf("range between same sat should be ~0 got %v", d)
 	}
 }
+
+// TestAdvancedElementsAnglesCanonicalRange ensures all propagated angular
+// elements (M, Raan, Argp) stay in the canonical [-180,180) range so the
+// element set never accumulates unbounded or out-of-range angles across many
+// propagation steps — a uniform representation regardless of date-line crossing.
+func TestAdvancedElementsAnglesCanonicalRange(t *testing.T) {
+	p := New()
+	// GEO with J2 secular drift advancing over a long horizon.
+	el := model.Elements{A: orbmath.AGeo, E: 0.001, I: 0.1, Raan: 170, Argp: 0, M: 0, Epoch: 0}
+	adv, err := p.AdvancedElements(el, 2000000) // ~23 days
+	if err != nil {
+		t.Fatalf("AdvancedElements err: %v", err)
+	}
+	for _, a := range []float64{adv.M, adv.Raan, adv.Argp} {
+		if a < -180 || a >= 180 {
+			t.Errorf("angle %v outside canonical [-180,180)", a)
+		}
+	}
+}
+

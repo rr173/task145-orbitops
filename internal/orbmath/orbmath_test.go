@@ -66,6 +66,65 @@ func TestECEFLLARoundTrip(t *testing.T) {
 	}
 }
 
+// TestNormalizeDegCanonicalAntimeridian locks the canonical representation
+// across the international date line: +180 and -180 denote the same meridian
+// and must both collapse to -180, and the function must be idempotent so a
+// value already in the range is never shifted.
+func TestNormalizeDegCanonicalAntimeridian(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want float64
+	}{
+		{180, -180},   // +180 folds to -180 (single canonical antimeridian)
+		{-180, -180},
+		{540, -180},   // 540 -> 180 -> -180
+		{-540, -180},
+		{179.999, 179.999},
+		{-179.999, -179.999},
+		{360, 0},
+		{-360, 0},
+	}
+	for _, c := range cases {
+		got := NormalizeDeg(c.in)
+		if got != c.want {
+			t.Errorf("NormalizeDeg(%v) = %v, want %v", c.in, got, c.want)
+		}
+		// idempotency: normalizing an already-normalized value is a no-op
+		if n2 := NormalizeDeg(got); n2 != got {
+			t.Errorf("NormalizeDeg not idempotent at %v: got %v", got, n2)
+		}
+		// invariant: result lives in [-180,180)
+		if got < -180 || got >= 180 {
+			t.Errorf("NormalizeDeg(%v) = %v outside [-180,180)", c.in, got)
+		}
+	}
+	// +180 and -180 must produce the SAME canonical value (same place, one number)
+	if NormalizeDeg(180) != NormalizeDeg(-180) {
+		t.Fatal("+180 and -180 must canonicalize to the same value")
+	}
+}
+
+// TestECEFtoLLAAntimeridianCanonical ensures the sub-satellite longitude
+// never leaks +180 at the date line: a point on the antimeridian (negative X
+// axis, equator) reports -180, matching the station-longitude representation
+// so the same position is never stored as two different numbers.
+func TestECEFtoLLAAntimeridianCanonical(t *testing.T) {
+	// ECEF point on the antimeridian at the equator: (-Req, 0, 0).
+	lla := ECEFtoLLA([3]float64{-Req, 0, 0})
+	if lla.Lon != -180 {
+		t.Fatalf("ECEFtoLLA(-Req,0,0).Lon = %v, want -180 (canonical)", lla.Lon)
+	}
+	if lla.Lat < -0.001 || lla.Lat > 0.001 {
+		t.Fatalf("ECEFtoLLA(-Req,0,0).Lat = %v, want ~0", lla.Lat)
+	}
+	// +180 and -180 ground stations map to the same ECEF round-trip longitude.
+	p := LLAtoECEF(0, 180, 0)
+	n := LLAtoECEF(0, -180, 0)
+	if ECEFtoLLA(p).Lon != ECEFtoLLA(n).Lon {
+		t.Fatal("lon=+180 and lon=-180 must round-trip to the same canonical longitude")
+	}
+}
+
 func TestPerigeeAltitude(t *testing.T) {
 	// a=7000, e=0.1: perigee altitude = 7000*0.9 - 6378.137 = 6300-6378.137 = -78.137 (suborbital-ish)
 	hp := PerigeeAltitudeKm(7000.0, 0.1)

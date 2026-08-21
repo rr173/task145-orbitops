@@ -17,6 +17,7 @@ import (
 	"orbitops/internal/idlib"
 	"orbitops/internal/maneuver"
 	"orbitops/internal/model"
+	"orbitops/internal/orbmath"
 	"orbitops/internal/propagator"
 	"orbitops/internal/store"
 )
@@ -191,8 +192,10 @@ func legalTransition(from, to model.SatelliteStatus) bool {
 
 // RegisterStation inserts a ground station.
 func (svc *Service) RegisterStation(ctx context.Context, name string, lat, lon, altM, minElev float64) (model.GroundStation, error) {
-	// normalize lon to [-180,180)
-	lon = normLon(lon)
+	// normalize lon through the single canonical [-180,180) path so a station
+	// on the antimeridian (entered as +180) is stored identically to one entered
+	// as -180, matching the longitude representation produced by propagation.
+	lon = orbmath.NormalizeDeg(lon)
 	if lat < -90 || lat > 90 {
 		return model.GroundStation{}, model.ErrStationNotFound
 	}
@@ -206,15 +209,6 @@ func (svc *Service) RegisterStation(ctx context.Context, name string, lat, lon, 
 	return st, err
 }
 
-func normLon(lon float64) float64 {
-	for lon < -180 {
-		lon += 360
-	}
-	for lon > 180 {
-		lon -= 360
-	}
-	return lon
-}
 
 // ForecastContacts computes contact windows for a satellite/station pair over
 // the given duration from start, persists them, appends a forecast_recompute

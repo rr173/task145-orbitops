@@ -40,10 +40,13 @@ func (p *Propagator) AdvancedElements(el model.Elements, t model.Epoch) (model.E
 
 	adv := el
 	adv.Epoch = t
-	// advance angles (radians) then convert back to degrees
+	// advance angles (radians) then convert back to degrees. All angular
+	// elements are folded into the canonical [-180,180) range so the element set
+	// uses a single representation regardless of how many times it crosses the
+	// date line / wraps past a full turn.
 	M := orbmath.D2R(el.M) + n*dt + mDot*dt
 	adv.M = orbmath.R2D(orbmath.NormalizeRad(M))
-	adv.Raan = el.Raan + orbmath.R2D(raanDot)*dt
+	adv.Raan = orbmath.NormalizeDeg(el.Raan + orbmath.R2D(raanDot)*dt)
 	adv.Argp = orbmath.NormalizeDeg(el.Argp + orbmath.R2D(argpDot)*dt)
 	return adv, nil
 }

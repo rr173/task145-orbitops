@@ -106,3 +106,36 @@ func TestCollisionEvaluateNoAlertWhenFar(t *testing.T) {
 		t.Fatalf("no alert expected, got %+v", alert)
 	}
 }
+
+// TestStationLongitudeCanonicalAntimeridian locks the date-line fix at the
+// service boundary: a ground station entered at +180 (east-of-antimeridian
+// convention) and one entered at -180 (west-of-antimeridian convention) are the
+// same physical station and must be persisted with one canonical longitude,
+// matching the longitude representation produced by propagation.
+func TestStationLongitudeCanonicalAntimeridian(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	stA, err := svc.RegisterStation(ctx, "Antimeridian-E", 0, 180, 0, 5)
+	if err != nil {
+		t.Fatalf("register +180: %v", err)
+	}
+	stB, err := svc.RegisterStation(ctx, "Antimeridian-W", 0, -180, 0, 5)
+	if err != nil {
+		t.Fatalf("register -180: %v", err)
+	}
+	if stA.LonDeg != stB.LonDeg {
+		t.Fatalf("antimeridian station longitudes differ: +%v vs %v (same place must canonicalize)", stA.LonDeg, stB.LonDeg)
+	}
+	if stA.LonDeg != -180 {
+		t.Fatalf("canonical antimeridian longitude = %v, want -180", stA.LonDeg)
+	}
+	// persisted value round-trips from the store unchanged.
+	got, err := svc.store.GetStation(ctx, stA.ID)
+	if err != nil {
+		t.Fatalf("get station: %v", err)
+	}
+	if got.LonDeg != -180 {
+		t.Fatalf("persisted longitude = %v, want -180", got.LonDeg)
+	}
+}
+

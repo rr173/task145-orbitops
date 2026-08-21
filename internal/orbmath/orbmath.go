@@ -61,10 +61,14 @@ func D2R(d float64) float64 { return d * Deg2Rad }
 // R2D converts radians to degrees.
 func R2D(r float64) float64 { return r * Rad2Deg }
 
-// NormalizeDeg wraps an angle in degrees to [-180,180).
+// NormalizeDeg wraps an angle in degrees to the half-open range [-180,180).
+// Both +180 and -180 (which denote the same meridian — the antimeridian / date
+// line) collapse to the single canonical value -180, so a position crossing
+// the international date line is never represented by two different numbers.
+// NormalizeDeg is idempotent.
 func NormalizeDeg(d float64) float64 {
 	d = math.Mod(d, 360.0)
-	if d > 180.0 {
+	if d >= 180.0 {
 		d -= 360.0
 	} else if d < -180.0 {
 		d += 360.0
@@ -187,7 +191,9 @@ func ECEFtoECI(v [3]float64, gmst float64) [3]float64 {
 
 // ECEFtoLLA converts an Earth-fixed position to geodetic lat/lon/alt using the
 // closed-form Bowring method on the WGS84-style ellipsoid (Req, Flatten).
-// lon in [-180,180), lat in [-90,90], alt in km above ellipsoid.
+// lon in [-180,180), lat in [-90,90], alt in km above ellipsoid. The longitude
+// is folded through NormalizeDeg so that the antimeridian (+180) is reported as
+// -180, keeping every longitude in the single canonical representation.
 func ECEFtoLLA(v [3]float64) model.LatLonAlt {
 	x, y, z := v[0], v[1], v[2]
 	p := math.Sqrt(x*x + y*y)
@@ -213,7 +219,7 @@ func ECEFtoLLA(v [3]float64) model.LatLonAlt {
 	if math.Abs(R2D(lat)) > 89.9 {
 		alt = math.Abs(z) - Rpol*math.Sqrt(1-e2) // fallback
 	}
-	return model.LatLonAlt{Lat: R2D(lat), Lon: R2D(lon), Alt: alt}
+	return model.LatLonAlt{Lat: R2D(lat), Lon: NormalizeDeg(R2D(lon)), Alt: alt}
 }
 
 // LLAtoECEF converts geodetic lat/lon/alt (degrees, km) to ECEF position.
