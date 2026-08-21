@@ -1,0 +1,10 @@
+# Runtime artifacts / build outputs excluded from delivery source.
+*.db
+*.db-wal
+*.db-shm
+orbitops
+/orbitops
+node_modules/
+dist/
+vendor/
+.DS_Store
