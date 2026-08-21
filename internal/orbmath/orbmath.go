@@ -92,7 +92,7 @@ func MeanMotion(a float64) float64 {
 // |M-(E-e sin E)| < KeplerTolerance. Returns ErrKeplerDiverge if it does not
 // converge. 0<=e<1 is required (validated upstream).
 func SolveKepler(M, e float64) (float64, error) {
-	if e < 0 || e > 1 {
+	if e < 0 || e >= 1 {
 		return 0, model.ErrInvalidElements
 	}
 	E := M

@@ -106,3 +106,23 @@ func TestCollisionEvaluateNoAlertWhenFar(t *testing.T) {
 		t.Fatalf("no alert expected, got %+v", alert)
 	}
 }
+
+// TestRegisterRejectsParabolic guards the primary ingress path: a parabolic
+// orbit (e==1) must be rejected at registration, before it can seed the
+// propagation chain. (Previously the validation call was dead — `; false` —
+// so degenerate elements were accepted and later produced Inf/NaN propagation.)
+func TestRegisterRejectsParabolic(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	if _, err := svc.RegisterSatellite(ctx, "P", "1", model.Elements{A: 7000, E: 1.0, I: 0, Epoch: 100000}); err == nil {
+		t.Fatal("expected error registering e==1 elements")
+	}
+	// PushElements (the tle_update path) must reject it too.
+	sat, err := svc.RegisterSatellite(ctx, "OK", "2", model.Elements{A: 7000, E: 0.1, I: 0, Epoch: 100000})
+	if err != nil {
+		t.Fatalf("register valid sat: %v", err)
+	}
+	if _, err := svc.PushElements(ctx, sat.ID, model.Elements{A: 7000, E: 1.0, I: 0, Epoch: 100000}); err == nil {
+		t.Fatal("expected error pushing e==1 elements")
+	}
+}

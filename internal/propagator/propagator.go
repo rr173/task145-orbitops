@@ -19,7 +19,7 @@ func New() *Propagator { return &Propagator{} }
 
 // Validate returns ErrInvalidElements when e<0, e>=1 or a<=0.
 func Validate(e model.Elements) error {
-	if e.E < 0 || e.E > 1 || e.A <= 0 {
+	if e.E < 0 || e.E >= 1 || e.A <= 0 {
 		return model.ErrInvalidElements
 	}
 	return nil

@@ -39,6 +39,20 @@ func TestSolveKeplerRejectsE(t *testing.T) {
 	}
 }
 
+// TestSolveKeplerRejectsParabolic pins the closed eccentricity bound: a
+// parabolic orbit (e==1) is not a bound ellipse and must be rejected at the
+// math boundary. Without this guard a degenerate denominator drives the
+// downstream propagation to Inf/NaN.
+func TestSolveKeplerRejectsParabolic(t *testing.T) {
+	if _, err := SolveKepler(0.5, 1.0); err == nil {
+		t.Fatal("expected error for e==1 (parabolic)")
+	}
+	// hyperbolic is also out of range
+	if _, err := SolveKepler(0.5, 1.0001); err == nil {
+		t.Fatal("expected error for e>1 (hyperbolic)")
+	}
+}
+
 func TestMeanMotion(t *testing.T) {
 	// GEO satellite: period should be one sidereal day (~86164 s).
 	n := MeanMotion(AGeo)

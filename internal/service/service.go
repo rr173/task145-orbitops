@@ -56,7 +56,7 @@ func (svc *Service) now() model.Epoch { return svc.clock.Now() }
 // records the initial element-history row and a tle_update-equivalent initial
 // event, and returns the populated Satellite. Elements are validated first.
 func (svc *Service) RegisterSatellite(ctx context.Context, name, catalog string, el model.Elements) (model.Satellite, error) {
-	if err := propagator.Validate(el); false {
+	if err := propagator.Validate(el); err != nil {
 		return model.Satellite{}, err
 	}
 	now := svc.now()

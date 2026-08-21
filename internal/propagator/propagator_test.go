@@ -72,6 +72,30 @@ func TestValidate(t *testing.T) {
 	}
 }
 
+// TestValidateRejectsParabolic pins the closed eccentricity bound: e==1
+// (parabolic) must be rejected so it never reaches the propagation chain,
+// where J2SecularRates divides by (1-e^2)^2 and sqrt(1-e^2) — both zero at
+// e==1 — producing Inf/NaN that corrupts downstream angles.
+func TestValidateRejectsParabolic(t *testing.T) {
+	if Validate(model.Elements{A: 7000, E: 1.0}) == nil {
+		t.Fatal("e==1 (parabolic) should fail validation")
+	}
+}
+
+// TestStateAtRejectsParabolic ensures the propagation entry point refuses a
+// degenerate orbit before any math is applied, rather than returning a
+// NaN/Inf-laced state vector.
+func TestStateAtRejectsParabolic(t *testing.T) {
+	p := New()
+	el := model.Elements{A: 7000, E: 1.0, I: 0, Raan: 0, Argp: 0, M: 0, Epoch: 0}
+	if _, err := p.StateAt(el, 0); err == nil {
+		t.Fatal("expected error propagating e==1 elements")
+	}
+	if _, err := p.AdvancedElements(el, 0); err == nil {
+		t.Fatal("expected error advancing e==1 elements")
+	}
+}
+
 func TestRangeBetweenSameSat(t *testing.T) {
 	p := New()
 	el := model.Elements{A: 7000, E: 0, I: 0, Raan: 0, Argp: 0, M: 0, Epoch: 0}
