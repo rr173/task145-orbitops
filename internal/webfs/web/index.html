@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrbitOps 轨道力学与卫星运行预报</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>🛰️ OrbitOps 轨道力学与卫星运行预报引擎</h1>
+  <p class="sub">轨道根数 → 星历 → 地面站过境 → 轨道保持机动 → 碰撞预警与规避 → 重启恢复重建</p>
+</header>
+<main>
+  <section class="card">
+    <h2>1. 录入卫星</h2>
+    <div class="grid">
+      <label>名称<input id="satName" placeholder="ISS"></label>
+      <label>编号<input id="satCatalog" placeholder="25544"></label>
+      <label>半长轴 a (km)<input id="satA" type="number" value="6800"></label>
+      <label>偏心率 e<input id="satE" type="number" step="0.0001" value="0.001"></label>
+      <label>倾角 i (°)<input id="satI" type="number" value="51.6"></label>
+      <label>RAAN Ω (°)<input id="satRaan" type="number" value="0"></label>
+      <label>近地点幅角 ω (°)<input id="satArgp" type="number" value="0"></label>
+      <label>平近点角 M (°)<input id="satM" type="number" value="0"></label>
+      <label>历元 (秒, 自J2000)<input id="satEpoch" type="number" value="100000"></label>
+    </div>
+    <button id="btnSat">注册卫星</button>
+    <pre id="satResult" class="result"></pre>
+  </section>
+
+  <section class="card">
+    <h2>2. 录入地面站</h2>
+    <div class="grid">
+      <label>名称<input id="stName" placeholder="Beijing"></label>
+      <label>纬度 (°)<input id="stLat" type="number" value="39.9"></label>
+      <label>经度 (°)<input id="stLon" type="number" value="116.4"></label>
+      <label>海拔 (m)<input id="stAlt" type="number" value="50"></label>
+      <label>最小仰角 (°)<input id="stElev" type="number" value="5"></label>
+    </div>
+    <button id="btnStation">注册地面站</button>
+    <pre id="stResult" class="result"></pre>
+  </section>
+
+  <section class="card">
+    <h2>3. 预报过境窗口</h2>
+    <div class="grid">
+      <label>卫星ID<input id="fcSat" placeholder="(留空用最后注册的卫星)"></label>
+      <label>地面站ID<input id="fcSta" placeholder="(留空用最后注册的地面站)"></label>
+      <label>起始时刻(秒)<input id="fcStart" type="number" value="100000"></label>
+      <label>时长(秒)<input id="fcDur" type="number" value="21600"></label>
+      <label>步长(秒)<input id="fcStep" type="number" value="60"></label>
+    </div>
+    <button id="btnForecast">预报过境</button>
+    <div id="contactList" class="tablewrap"></div>
+  </section>
+
+  <section class="card">
+    <h2>4. 轨道保持机动</h2>
+    <div class="grid">
+      <label>卫星ID<input id="mvSat" placeholder="(留空用最后注册的卫星)"></label>
+      <label>类型<select id="mvType"><option value="ew_stationkeep">东西位置保持(EW)</option><option value="perigee_raise">近地点提升</option></select></label>
+      <label>执行时刻(秒)<input id="mvExec" type="number" value="100000"></label>
+    </div>
+    <button id="btnManeuver">规划机动</button>
+    <pre id="mvResult" class="result"></pre>
+  </section>
+
+  <section class="card">
+    <h2>5. 重启恢复重建</h2>
+    <p>调用 ReconcileAll 重放事件流,重建「下一过境/保持窗口/未关闭告警数」。重启前后应逐字段相等。</p>
+    <button id="btnReconcile">执行 ReconcileAll</button>
+    <button id="btnSnapshot">查看下一窗口快照</button>
+    <pre id="nwResult" class="result"></pre>
+  </section>
+
+  <section class="card">
+    <h2>6. 星座摘要</h2>
+    <button id="btnConst">刷新摘要</button>
+    <div id="constList" class="tablewrap"></div>
+  </section>
+</main>
+<footer><small>OrbitOps · Go 1.26.3 · SQLite(modernc) · 原生前端(不计入Go行数)</small></footer>
+<script src="app.js"></script>
+</body>
+</html>
