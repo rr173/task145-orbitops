@@ -100,6 +100,6 @@ func scanContact(sc scanner) (model.Contact, error) {
 	c.TCA = model.Epoch(tca)
 	c.ComputedAt = model.Epoch(ca)
 	c.Sunlit = sun != 0
-	c.Source = ""
+	c.Source = model.ContactSource(src)
 	return c, nil
 }

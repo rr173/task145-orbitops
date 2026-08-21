@@ -75,7 +75,7 @@ func scanAlert(sc scanner) (model.CollisionAlert, error) {
 	}
 	a.TCA = model.Epoch(tca)
 	a.CreatedAt = model.Epoch(ca)
-	a.Status = ""
+	a.Status = model.AlertStatus(status)
 	if avoid.Valid {
 		a.AvoidManeuverID = avoid.String
 	}

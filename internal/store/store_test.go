@@ -100,3 +100,58 @@ func TestNextWindowUpsert(t *testing.T) {
 		t.Fatalf("open alerts = %d want 3", got.OpenAlerts)
 	}
 }
+
+// TestLifecycleStateRoundTrip guards against the regression where contact
+// source, maneuver status and alert status were dropped to "" on read, so the
+// UI could not tell the real lifecycle stage after a reload.
+func TestLifecycleStateRoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	// Contact source survives a read.
+	contact := model.Contact{
+		ID: "c1", SatelliteID: "s1", StationID: "st1",
+		AOS: 1000, Los: 2000, TCA: 1500, MaxElevationDeg: 45,
+		AOSAzDeg: 10, LosAzDeg: 350, Sunlit: true,
+		Source: model.ContactReplay, ComputedAt: 900,
+	}
+	if err := s.InTx(ctx, func(q *Queries) error { return q.InsertContact(ctx, contact) }); err != nil {
+		t.Fatalf("insert contact: %v", err)
+	}
+	if got, err := s.q.GetContact(ctx, "c1"); err != nil {
+		t.Fatalf("get contact: %v", err)
+	} else if got.Source != model.ContactReplay {
+		t.Fatalf("contact source = %q want %q", got.Source, model.ContactReplay)
+	}
+
+	// Maneuver status survives a read.
+	maneuver := model.Maneuver{
+		ID: "m1", SatelliteID: "s1", Type: model.ManeuverPerigeeRaise,
+		PlannedAt: 1000, ExecutedAt: 2000, DeltaVMps: 1.5,
+		Target: model.Elements{A: 7000, E: 0.01, I: 28, Raan: 0, Argp: 0, M: 0, Epoch: 1000},
+		Status: model.ManeuverExecuting, CreatedAt: 900,
+	}
+	if err := s.InTx(ctx, func(q *Queries) error { return q.InsertManeuver(ctx, maneuver) }); err != nil {
+		t.Fatalf("insert maneuver: %v", err)
+	}
+	if got, err := s.q.GetManeuver(ctx, "m1"); err != nil {
+		t.Fatalf("get maneuver: %v", err)
+	} else if got.Status != model.ManeuverExecuting {
+		t.Fatalf("maneuver status = %q want %q", got.Status, model.ManeuverExecuting)
+	}
+
+	// Alert status survives a read.
+	alert := model.CollisionAlert{
+		ID: "a1", PrimaryID: "s1", SecondaryID: "s2", TCA: 5000,
+		MinDistanceKm: 0.5, CollisionProbability: 0.9,
+		Status: model.AlertAvoided, AvoidManeuverID: "m1", CreatedAt: 900,
+	}
+	if err := s.InTx(ctx, func(q *Queries) error { return q.InsertAlert(ctx, alert) }); err != nil {
+		t.Fatalf("insert alert: %v", err)
+	}
+	if got, err := s.q.GetAlert(ctx, "a1"); err != nil {
+		t.Fatalf("get alert: %v", err)
+	} else if got.Status != model.AlertAvoided {
+		t.Fatalf("alert status = %q want %q", got.Status, model.AlertAvoided)
+	}
+}

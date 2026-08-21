@@ -99,7 +99,7 @@ func scanManeuver(sc scanner) (model.Maneuver, error) {
 		return model.Maneuver{}, err
 	}
 	m.Type = model.ManeuverType(typ)
-	m.Status = ""
+	m.Status = model.ManeuverStatus(status)
 	m.PlannedAt = model.Epoch(pa)
 	m.ExecutedAt = model.Epoch(ea)
 	m.CreatedAt = model.Epoch(ca)
