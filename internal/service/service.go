@@ -307,8 +307,13 @@ func (svc *Service) PlanManeuver(ctx context.Context, satID string, typ model.Ma
 	}
 	m.ID = svc.idGen()
 	payload, _ := store.EncodePayload(maneuverPayload(m))
+	// The planned maneuver occupies the half-open window [execAt, execAt+1).
+	// Fetch all active maneuvers on this satellite and let the unified
+	// maneuver.Overlap boundary (the single source of truth) decide conflicts.
+	// The store deliberately applies no time-window filter of its own, so that
+	// there is only one boundary judgment in the whole flow.
 	err = svc.store.InTx(ctx, func(q *store.Queries) error {
-		existing, err := q.ListActiveManeuvers(ctx, satID, execAt+1, execAt+1)
+		existing, err := q.ListActiveManeuvers(ctx, satID, 0, 0)
 		if err != nil {
 			return err
 		}
@@ -425,8 +430,10 @@ func (svc *Service) PlanAvoidance(ctx context.Context, alertID string, execAt mo
 	}
 	m.ID = svc.idGen()
 	payload, _ := store.EncodePayload(maneuverPayload(m))
+	// Fetch all active maneuvers on this satellite; the unified half-open
+	// maneuver.Overlap boundary alone decides conflicts.
 	err = svc.store.InTx(ctx, func(q *store.Queries) error {
-		existing, err := q.ListActiveManeuvers(ctx, primary.ID, execAt, execAt+1)
+		existing, err := q.ListActiveManeuvers(ctx, primary.ID, 0, 0)
 		if err != nil {
 			return err
 		}

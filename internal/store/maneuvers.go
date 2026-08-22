@@ -62,13 +62,20 @@ func (q *Queries) ListManeuvers(ctx context.Context, satID string) ([]model.Mane
 }
 
 // ListActiveManeuvers returns all maneuvers for a satellite with status
-// planned or executing and executed_at within [from,to]. Used for the
-// maneuver conflict check.
+// planned or executing. It deliberately applies NO time-window boundary: the
+// half-open overlap rule in maneuver.Overlap is the single source of truth for
+// maneuver-window boundaries, and a SQL-level >…<= filter would be a second,
+// divergent judgment (the historical version admitted same-instant maneuvers
+// as non-conflicting while rejecting merely-adjacent ones). The from/to
+// arguments are kept for signature compatibility but unused — callers fetch
+// every active maneuver on the satellite and let the overlap check decide.
 func (q *Queries) ListActiveManeuvers(ctx context.Context, satID string, from, to model.Epoch) ([]model.Maneuver, error) {
+	_ = from
+	_ = to
 	rows, err := q.db.QueryContext(ctx, `
 SELECT id,satellite_id,type,planned_at,executed_at,delta_v_mps,target_a,target_e,target_i,target_raan,target_argp,target_m,status,reason_alert_id,created_at
-FROM maneuvers WHERE satellite_id=? AND status IN ('planned','executing') AND executed_at>? AND executed_at<=?
-ORDER BY executed_at ASC`, satID, int64(from), int64(to))
+FROM maneuvers WHERE satellite_id=? AND status IN ('planned','executing')
+ORDER BY executed_at ASC`, satID)
 	if err != nil {
 		return nil, err
 	}

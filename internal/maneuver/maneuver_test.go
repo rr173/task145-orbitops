@@ -59,6 +59,41 @@ func TestOverlap(t *testing.T) {
 	}
 }
 
+// TestOverlapSameInstant locks the first symptom of the unified-boundary fix:
+// two maneuvers sharing an execution instant MUST conflict. With the old
+// closed-interval boundary in Overlap paired with the SQL >…<= pre-filter,
+// same-instant maneuvers could slip past the conflict check (the historical
+// PlanManeuver query passed from=execAt+1,to=execAt+1, a contradiction that
+// always returned empty). Half-open [Start, End) makes same-start windows
+// overlap by construction.
+func TestOverlapSameInstant(t *testing.T) {
+	w := Window{Start: 100, End: 101}
+	if !Overlap(w, w) {
+		t.Fatal("identical windows must overlap")
+	}
+	// two maneuvers scheduled at the same execution epoch
+	m1 := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 100, Status: model.ManeuverPlanned}
+	m2 := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 100, Status: model.ManeuverPlanned}
+	if !Overlap(ManeuverWindow(m1), ManeuverWindow(m2)) {
+		t.Fatal("same-instant maneuvers must be flagged as conflicting")
+	}
+}
+
+// TestOverlapAdjacentNotConflict locks the second symptom: adjacent windows
+// (one's End equals the other's Start) must NOT conflict — they represent
+// back-to-back maneuvers. The old closed boundary reported these as overlapping.
+func TestOverlapAdjacentNotConflict(t *testing.T) {
+	m1 := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 100, Status: model.ManeuverPlanned}
+	m2 := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 101, Status: model.ManeuverPlanned} // starts exactly when m1 ends
+	if Overlap(ManeuverWindow(m1), ManeuverWindow(m2)) {
+		t.Fatal("adjacent (back-to-back) maneuvers must not conflict")
+	}
+	// reverse order should also be conflict-free
+	if Overlap(ManeuverWindow(m2), ManeuverWindow(m1)) {
+		t.Fatal("adjacent (back-to-back) maneuvers must not conflict (reversed)")
+	}
+}
+
 func TestCheckConflict(t *testing.T) {
 	planned := model.Maneuver{SatelliteID: "s1", PlannedAt: 100, ExecutedAt: 100, Status: model.ManeuverPlanned}
 	existing := []model.Maneuver{
@@ -74,6 +109,32 @@ func TestCheckConflict(t *testing.T) {
 	}
 	if err := CheckConflictAgainstExisting(planned, existing2); err != nil {
 		t.Fatalf("expected no conflict, got %v", err)
+	}
+}
+
+// TestCheckConflictSameInstantPlanned exercises the full conflict path
+// (ManeuverWindow + Overlap) for the "two same-instant planned maneuvers"
+// case the unified boundary is meant to catch.
+func TestCheckConflictSameInstantPlanned(t *testing.T) {
+	planned := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 500, Status: model.ManeuverPlanned}
+	existing := []model.Maneuver{
+		{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 500, Status: model.ManeuverPlanned},
+	}
+	if err := CheckConflictAgainstExisting(planned, existing); err != model.ErrManeuverConflict {
+		t.Fatalf("expected ErrManeuverConflict for same-instant maneuvers, got %v", err)
+	}
+}
+
+// TestCheckConflictAdjacentNotConflict exercises the full conflict path for
+// back-to-back maneuvers: the second starts exactly when the first's window
+// ends, so there must be no conflict.
+func TestCheckConflictAdjacentNotConflict(t *testing.T) {
+	planned := model.Maneuver{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 500, Status: model.ManeuverPlanned} // window [500,501)
+	existing := []model.Maneuver{
+		{SatelliteID: "s1", PlannedAt: 0, ExecutedAt: 499, Status: model.ManeuverPlanned}, // window [499,500) — touches, no overlap
+	}
+	if err := CheckConflictAgainstExisting(planned, existing); err != nil {
+		t.Fatalf("expected no conflict for adjacent maneuvers, got %v", err)
 	}
 }
 

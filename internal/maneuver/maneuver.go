@@ -76,9 +76,14 @@ func ValidateExecTime(dec *EWDecision, execAt model.Epoch) error {
 	return nil
 }
 
-// Overlap reports whether two maneuver execution windows [pa,pe] and
-// [sa,se] overlap in time. Zero-length windows (un-executed, execAt=0) are
-// treated as planned windows using PlannedAt as a 1-second window.
+// A maneuver's execution window is a half-open interval [Start, End): the
+// burn occupies every instant t with Start <= t < End. Half-open boundaries
+// are the single source of truth for the conflict decision: two windows
+// conflict iff they share at least one instant, so windows that merely touch
+// at a boundary (one's End equals the other's Start) do NOT conflict, while
+// windows starting at the same instant DO conflict. ManeuverWindow widens a
+// maneuver's execution epoch into a 1-second slot [t, t+1); un-executed
+// maneuvers (ExecutedAt==0) fall back to PlannedAt.
 type Window struct{ Start, End model.Epoch }
 
 func ManeuverWindow(m model.Maneuver) Window {
@@ -88,8 +93,13 @@ func ManeuverWindow(m model.Maneuver) Window {
 	return Window{Start: m.PlannedAt, End: m.PlannedAt + 1}
 }
 
+// Overlap reports whether two half-open windows [a.Start, a.End) and
+// [b.Start, b.End) share any instant. Boundary-touching windows (a.End ==
+// b.Start or b.End == a.Start) do not overlap; windows with a common start
+// do. This is the sole boundary judgment for maneuver conflicts — every
+// caller must route through here rather than re-deriving its own boundary.
 func Overlap(a, b Window) bool {
-	return a.Start <= b.End && b.Start <= a.End
+	return a.Start < b.End && b.Start < a.End
 }
 
 // PlanEW builds a Maneuver record for an EW burn from a decision and an

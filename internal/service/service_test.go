@@ -106,3 +106,53 @@ func TestCollisionEvaluateNoAlertWhenFar(t *testing.T) {
 		t.Fatalf("no alert expected, got %+v", alert)
 	}
 }
+
+// TestPlanManeuverSameInstantConflict locks the full-flow fix: two maneuvers
+// scheduled at the same execution instant on the same satellite must NOT both
+// be accepted. Before the unified boundary, PlanManeuver passed from/to=
+// execAt+1 to ListActiveManeuvers, a contradiction (executed_at > execAt+1 AND
+// executed_at <= execAt+1) that always returned empty, so the conflict check
+// saw nothing and the same-instant second maneuver was admitted — producing
+// inconsistent scheduling state. With the boundary unified in maneuver.Overlap,
+// the second plan must return ErrManeuverConflict.
+func TestPlanManeuverSameInstantConflict(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	// Low perigee so perigee_raise is required and always plannable here.
+	low, _ := svc.RegisterSatellite(ctx, "LOW", "2", model.Elements{A: 6600, E: 0.12, I: 28.5, Raan: 0, Argp: 0, M: 0, Epoch: 100000})
+	const execAt = model.Epoch(100000)
+	if _, err := svc.PlanManeuver(ctx, low.ID, model.ManeuverPerigeeRaise, execAt); err != nil {
+		t.Fatalf("first plan: %v", err)
+	}
+	if _, err := svc.PlanManeuver(ctx, low.ID, model.ManeuverPerigeeRaise, execAt); err != model.ErrManeuverConflict {
+		t.Fatalf("second plan at same instant: want ErrManeuverConflict, got %v", err)
+	}
+}
+
+// TestPlanManeuverAdjacentNoConflict locks the companion half of the unified
+// boundary: a second maneuver whose execution instant immediately follows the
+// first's 1-second window (back-to-back) must be accepted, since half-open
+// [Start, End) windows that merely touch do not overlap. The old closed
+// interval would have rejected this as a false conflict. PlanPerigeeRaise
+// stamps ExecutedAt=now (the execAt arg is ignored), so we advance the fake
+// clock by one second between plans to make the windows genuinely adjacent:
+// first is [100000,100001), second is [100001,100002).
+func TestPlanManeuverAdjacentNoConflict(t *testing.T) {
+	dir := t.TempDir()
+	s, err := store.Open(filepath.Join(dir, "adj_test.db"))
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+	clk := clock.NewFake(100000)
+	svc := New(s, clk)
+	ctx := context.Background()
+	low, _ := svc.RegisterSatellite(ctx, "LOW2", "3", model.Elements{A: 6600, E: 0.12, I: 28.5, Raan: 0, Argp: 0, M: 0, Epoch: 100000})
+	if _, err := svc.PlanManeuver(ctx, low.ID, model.ManeuverPerigeeRaise, 100000); err != nil {
+		t.Fatalf("first plan: %v", err)
+	}
+	clk.Advance(1) // next ExecutedAt = 100001 → window [100001,100002), adjacent to the first
+	if _, err := svc.PlanManeuver(ctx, low.ID, model.ManeuverPerigeeRaise, 100001); err != nil {
+		t.Fatalf("adjacent plan should be accepted: %v", err)
+	}
+}
