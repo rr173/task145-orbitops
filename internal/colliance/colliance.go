@@ -148,8 +148,11 @@ func (pr *Predictor) PlanAvoidance(a, b model.Elements, res *EvalResult, execAt 
 	// given a circular-velocity v_a: delta-v ~ needed_km * 1000 / dt (m/s) / v_a * v_a
 	// Simplified locked form: dv = needed / dt (km/s -> m/s).
 	dv := needed / dt * 1000.0
-	// post-burn estimate: current miss + needed, capped at safe.
-	post := res.MinDistanceKm + needed - 0.1
+	// post-burn estimate: current miss + needed = exactly the safe threshold.
+	// "Just clears" the safe distance (post == CollisionSafeKm) must count as
+	// safe, so the comparison is strict (<) and matches every other layer;
+	// there is no safety margin shaved off here.
+	post := res.MinDistanceKm + needed
 	if post < orbmath.CollisionSafeKm {
 		return 0, post, model.ErrAvoidanceInsufficient
 	}

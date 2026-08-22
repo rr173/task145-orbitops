@@ -149,8 +149,11 @@ func (pl *Planner) PlanPerigeeRaise(satID string, el model.Elements, B float64, 
 // PlanCollisionAvoidance builds an avoidance maneuver. It accepts the computed
 // avoidance delta-v and the post-avoidance minimum distance; if the latter
 // does not clear the safe threshold it returns ErrAvoidanceInsufficient.
+// "Clears" means post-burn distance >= CollisionSafeKm, so an exactly-safe
+// conjunction (post == CollisionSafeKm) is accepted — consistent with the
+// strict (<) comparison used by colliance.PlanAvoidance.
 func PlanCollisionAvoidance(satID, alertID string, dvMps float64, postMinDistKm float64, execAt model.Epoch, targetEl model.Elements, now model.Epoch) (model.Maneuver, error) {
-	if postMinDistKm <= orbmath.CollisionSafeKm {
+	if postMinDistKm < orbmath.CollisionSafeKm {
 		return model.Maneuver{}, model.ErrAvoidanceInsufficient
 	}
 	target := targetEl

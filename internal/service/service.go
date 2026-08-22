@@ -17,6 +17,7 @@ import (
 	"orbitops/internal/idlib"
 	"orbitops/internal/maneuver"
 	"orbitops/internal/model"
+	"orbitops/internal/orbmath"
 	"orbitops/internal/propagator"
 	"orbitops/internal/store"
 )
@@ -357,7 +358,7 @@ func (svc *Service) EvaluateCollision(ctx context.Context, primaryID, secondaryI
 	if err != nil {
 		return nil, nil, err
 	}
-	if res.MinDistanceKm >= 10.0 { // alert threshold (orbmath.CollisionAlertKm)
+	if res.MinDistanceKm >= orbmath.CollisionAlertKm { // at/above alert threshold: no hazard
 		return res, nil, nil
 	}
 	now := svc.now()
