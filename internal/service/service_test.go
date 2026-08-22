@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"orbitops/internal/clock"
@@ -75,6 +76,34 @@ func TestReconcileIdempotent(t *testing.T) {
 		if v != v2 {
 			t.Fatalf("idempotency broken for %s: %+v vs %+v", k, v, v2)
 		}
+	}
+}
+
+func TestReconcileSameTimestampEvents(t *testing.T) {
+	// Register + forecast both run at the fake clock's 100000s, so the
+	// tle_update and forecast_recompute events share ts_sec AND created_at.
+	// ReconcileAll must tolerate the shared timestamp (no event_out_of_order)
+	// and remain idempotent across repeated reconciles. Regression for the
+	// "same-second events replayed in unstable order" bug.
+	svc, _ := newSvc(t)
+	ctx := context.Background()
+	sat, _ := svc.RegisterSatellite(ctx, "LEO1", "25544", model.Elements{
+		A: 6800, E: 0.001, I: 51.6, Raan: 0, Argp: 0, M: 0, Epoch: 100000,
+	})
+	st, _ := svc.RegisterStation(ctx, "Equator", 0, 0, 0, 5)
+	if _, err := svc.ForecastContacts(ctx, sat.ID, st.ID, 100000, 6*3600, 60); err != nil {
+		t.Fatalf("forecast: %v", err)
+	}
+	if err := svc.ReconcileAll(ctx); err != nil {
+		t.Fatalf("reconcile with same-ts events failed: %v", err)
+	}
+	snap1, _ := svc.SnapshotNextWindows(ctx)
+	if err := svc.ReconcileAll(ctx); err != nil {
+		t.Fatalf("reconcile2: %v", err)
+	}
+	snap2, _ := svc.SnapshotNextWindows(ctx)
+	if !reflect.DeepEqual(snap1, snap2) {
+		t.Fatalf("idempotency broken for same-ts events: %+v vs %+v", snap1, snap2)
 	}
 }
 

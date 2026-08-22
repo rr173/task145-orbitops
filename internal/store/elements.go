@@ -22,10 +22,16 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?)`, id, h.SatelliteID, h.Elements.A, h.Elements.E, 
 	return err
 }
 
+// ListElementHistory returns a satellite's element-history rows in epoch order.
+// The tie-breakers (created_at, then id ascending) keep the order stable and
+// restart-independent for rows recorded in the same second (e.g. the initial
+// history row and a tle_update written in one transaction share an identical
+// clock reading). id is assigned monotonically at insert time, so it encodes
+// the true recording order when created_at cannot disambiguate.
 func (q *Queries) ListElementHistory(ctx context.Context, satID string) ([]model.ElementHistory, error) {
 	rows, err := q.db.QueryContext(ctx, `
 SELECT id,satellite_id,a,e,i,raan,argp,m,epoch_sec,source,created_at
-FROM element_history WHERE satellite_id=? ORDER BY epoch_sec ASC, created_at DESC`, satID)
+FROM element_history WHERE satellite_id=? ORDER BY epoch_sec ASC, created_at ASC, id ASC`, satID)
 	if err != nil {
 		return nil, err
 	}
@@ -48,12 +54,14 @@ FROM element_history WHERE satellite_id=? ORDER BY epoch_sec ASC, created_at DES
 }
 
 // LatestElementHistory returns the last element-history row for a satellite
-// (highest epoch, then highest created_at). Used as the reconciliation
-// baseline.
+// (highest epoch, then highest created_at, then highest id). The id
+// tie-breaker makes the selection deterministic when several rows share one
+// clock reading; it reflects the most recently inserted row at that instant.
+// Used as the reconciliation baseline.
 func (q *Queries) LatestElementHistory(ctx context.Context, satID string) (model.ElementHistory, error) {
 	row := q.db.QueryRowContext(ctx, `
 SELECT id,satellite_id,a,e,i,raan,argp,m,epoch_sec,source,created_at
-FROM element_history WHERE satellite_id=? ORDER BY epoch_sec DESC, created_at DESC LIMIT 1`, satID)
+FROM element_history WHERE satellite_id=? ORDER BY epoch_sec DESC, created_at DESC, id DESC LIMIT 1`, satID)
 	var h model.ElementHistory
 	var src string
 	var ep, ca int64

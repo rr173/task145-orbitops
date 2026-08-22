@@ -23,14 +23,14 @@ import (
 
 // Service wires the store and domain packages together.
 type Service struct {
-	store     *store.Store
-	prop      *propagator.Propagator
-	scanner   *groundtrack.Scanner
-	planner   *maneuver.Planner
-	predict   *colliance.Predictor
-	clock     clock.Clock
-	idGen     func() string
-	mu        sync.Mutex
+	store   *store.Store
+	prop    *propagator.Propagator
+	scanner *groundtrack.Scanner
+	planner *maneuver.Planner
+	predict *colliance.Predictor
+	clock   clock.Clock
+	idGen   func() string
+	mu      sync.Mutex
 }
 
 // New constructs a Service. The clock may be real or fake.
@@ -451,8 +451,10 @@ func (svc *Service) PlanAvoidance(ctx context.Context, alertID string, execAt mo
 
 // ReconcileAll replays the event stream in ts-ascending order, rebuilding the
 // next-window cache from the authoritative element history and events. It is
-// idempotent: running it twice yields identical cache contents. Out-of-order
-// events abort the replay with ErrEventOutOfOrder.
+// idempotent: running it twice yields identical cache contents. Events whose
+// ts_sec goes backwards relative to the previous event abort the replay with
+// ErrEventOutOfOrder; events sharing a ts_sec are allowed and replayed in the
+// stable order ListEventsOrdered returns (created_at, then id).
 func (svc *Service) ReconcileAll(ctx context.Context) error {
 	svc.mu.Lock()
 	defer svc.mu.Unlock()
@@ -465,7 +467,13 @@ func (svc *Service) ReconcileAll(ctx context.Context) error {
 	// history and forecast_recompute events.
 	satIDs := map[string]bool{}
 	for _, e := range events {
-		if e.Ts <= lastTs {
+		// Replay order is non-decreasing in ts_sec. Several flows (register,
+		// push elements, forecast) append multiple events in one transaction at
+		// an identical clock reading, so equality is expected and permitted;
+		// only a genuine backwards jump is an ordering violation. The stable
+		// tie-break in ListEventsOrdered (id) gives same-ts events a fixed,
+		// restart-independent sequence.
+		if e.Ts < lastTs {
 			return model.ErrEventOutOfOrder
 		}
 		lastTs = e.Ts
